@@ -1,10 +1,10 @@
 package com.robbi5.notificationlightbridge
 
+import android.annotation.TargetApi
 import android.app.NotificationManager
 import android.graphics.Color
 import android.os.Build
 import android.service.notification.StatusBarNotification
-import android.support.annotation.RequiresApi
 import android.util.Log
 import java.io.DataOutputStream
 
@@ -42,7 +42,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         return color
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    @TargetApi(Build.VERSION_CODES.O)
     fun pullColorFromChannelApi26(sbn: StatusBarNotification): Int? {
         Log.i("NLS", "got notification pkg=${sbn?.packageName}, txt=${sbn?.notification?.tickerText}")
         if (sbn.notification.channelId.isNullOrEmpty()) {
