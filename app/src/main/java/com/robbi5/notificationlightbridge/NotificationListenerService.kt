@@ -1,6 +1,7 @@
 package com.robbi5.notificationlightbridge
 
 import android.annotation.TargetApi
+import android.app.Notification.FLAG_SHOW_LIGHTS
 import android.app.NotificationManager
 import android.graphics.Color
 import android.os.Build
@@ -27,7 +28,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         if (sbn == null || notificationManager == null) return
         val color = pullColor(sbn)
         if (color != 0) {
-            send(listOf(COLOR_ON, color)) // on
+            send(listOf(COLOR_ON, color))
         }
     }
 
@@ -36,7 +37,10 @@ class NotificationListenerService: android.service.notification.NotificationList
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             color = pullColorFromChannelApi26(sbn)
         }
+        @Suppress("DEPRECATION")
         if (color == null) {
+            if (sbn.notification.ledOnMS == 0) return 0
+            if (sbn.notification.flags and FLAG_SHOW_LIGHTS == 0) return 0
             color = colorMapping(sbn.notification.ledARGB)
         }
         return color
@@ -65,7 +69,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         val notifications = activeNotifications.filter { pullColor(it) != 0 }
         if (notifications.isEmpty()) {
             Log.i("NLS", "found no other notifications, turning off")
-            send(COLOR_OFF) // off
+            send(COLOR_OFF)
             return
         }
         val n = notifications.maxByOrNull { it.postTime }!!
