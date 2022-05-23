@@ -11,6 +11,11 @@ import java.io.DataOutputStream
 
 class NotificationListenerService: android.service.notification.NotificationListenerService() {
 
+    companion object {
+        const val COLOR_OFF = 0x02
+        const val COLOR_ON = 0x03
+    }
+
     private var notificationManager: NotificationManager? = null
 
     override fun onListenerConnected() {
@@ -27,8 +32,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         if (color == null) {
             color = colorMapping(sbn.notification.ledARGB)
         }
-        send(0x03) // on
-        send(color)
+        send(listOf(COLOR_ON, color)) // on
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -76,17 +80,24 @@ class NotificationListenerService: android.service.notification.NotificationList
     }
 
     fun send(color: Int) {
-        val colorHex = "%02x".format(color)
-        Log.i("NLS", "sending ${colorHex}")
-        rootedExec("echo w 0x${colorHex} > /sys/devices/platform/led_con_h/zigbee_reset");
+        send(listOf(color))
     }
 
-    fun rootedExec(command: String) {
-        Log.i("NLS", "command ${command}")
+    fun send(colors: List<Int>) {
+        val colorHexs = colors.map { "%02x".format(it) }
+        Log.i("NLS", "sending ${colorHexs.joinToString()}")
+        val commands = colorHexs.map { "echo w 0x${it} > /sys/devices/platform/led_con_h/zigbee_reset\nsleep 0.1" }
+        rootedExec(commands)
+    }
+
+    fun rootedExec(commands: List<String>) {
         try {
             val process = Runtime.getRuntime().exec("su")
             val os = DataOutputStream(process.outputStream)
-            os.writeBytes(command + "\n")
+            for (command in commands) {
+                Log.i("NLS", "command ${command}")
+                os.writeBytes(command + "\n")
+            }
             os.writeBytes("exit\n")
             os.close()
         } catch (e: Exception) {
