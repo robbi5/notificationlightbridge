@@ -25,6 +25,13 @@ class NotificationListenerService: android.service.notification.NotificationList
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null || notificationManager == null) return
+        val color = pullColor(sbn)
+        if (color != 0) {
+            send(listOf(COLOR_ON, color)) // on
+        }
+    }
+
+    fun pullColor(sbn: StatusBarNotification): Int {
         var color: Int? = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             color = pullColorFromChannelApi26(sbn)
@@ -32,7 +39,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         if (color == null) {
             color = colorMapping(sbn.notification.ledARGB)
         }
-        send(listOf(COLOR_ON, color)) // on
+        return color
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -54,7 +61,17 @@ class NotificationListenerService: android.service.notification.NotificationList
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         Log.i("NLS", "removed notification pkg=${sbn?.packageName}, txt=${sbn?.notification?.tickerText}")
-        send(0x02) // off
+
+        val notifications = activeNotifications.filter { pullColor(it) != 0 }
+        if (notifications.isEmpty()) {
+            Log.i("NLS", "found no other notifications, turning off")
+            send(COLOR_OFF) // off
+            return
+        }
+        val n = notifications.maxByOrNull { it.postTime }!!
+        val color = pullColor(n)
+        Log.i("NLS", "found still active notification, pkg=${n.packageName}, txt=${n.notification.tickerText}")
+        send(color)
     }
 
     fun colorMapping(notificationColor: Int): Int {
@@ -62,6 +79,7 @@ class NotificationListenerService: android.service.notification.NotificationList
         Color.colorToHSV(notificationColor, hsv)
 
         if (hsv[1] == 0F && hsv[2] == 100F) return 0x07 // white
+        if (hsv[2] == 0F) return 0 // black
 
         return when(hsv[0]) {
             in   0F .. 30F  -> 0x04 // red
