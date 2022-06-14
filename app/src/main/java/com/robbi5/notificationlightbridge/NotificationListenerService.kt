@@ -13,6 +13,7 @@ class NotificationListenerService: android.service.notification.NotificationList
 
     private var notificationManager: NotificationManager? = null
     private val setColorReceiver = SetColorReceiver()
+    private val pretixReceiver = PretixReceiver()
     private val led = LED()
 
     override fun onListenerConnected() {
@@ -20,14 +21,22 @@ class NotificationListenerService: android.service.notification.NotificationList
         notificationManager = application.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val setColorReceiverIntent = IntentFilter()
-        setColorReceiverIntent.addAction("com.robbi5.notificationlightbridge.TURN_OFF")
-        setColorReceiverIntent.addAction("com.robbi5.notificationlightbridge.SET_COLOR")
+        SetColorReceiver.intent_actions.map {
+            setColorReceiverIntent.addAction(it)
+        }
         registerReceiver(setColorReceiver, setColorReceiverIntent)
+
+        val pretixReceiverIntent = IntentFilter()
+        PretixReceiver.intent_actions.map {
+            pretixReceiverIntent.addAction(it)
+        }
+        registerReceiver(pretixReceiver, pretixReceiverIntent)
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         unregisterReceiver(setColorReceiver)
+        unregisterReceiver(pretixReceiver)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
