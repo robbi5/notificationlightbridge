@@ -39,8 +39,29 @@ class NotificationListenerService: android.service.notification.NotificationList
         unregisterReceiver(pretixReceiver)
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        if (sbn == null || notificationManager == null) return
+    override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !rankingMap.orderedKeys.contains(sbn.key)) {
+            // ranking map was worthless (or is not available), lets try to pull the color from the notification itself
+            return onNotificationPosted(sbn)
+        }
+
+        val r = Ranking()
+        rankingMap.getRanking(sbn.key, r)
+        if (r.channel != null && r.channel.shouldShowLights()) {
+            Log.i("NLS", "found active notification with channel color, pkg=${sbn.packageName}, channel=${r.channel.name}")
+            val color = led.colorMapping(r.channel.lightColor)
+            if (color != 0) {
+                led.send(listOf(LED.TURN_ON, color))
+                return
+            }
+        }
+
+        // channel extraction didn't find a color, continue with the classic way
+        return onNotificationPosted(sbn)
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (notificationManager == null) return
         val color = pullColor(sbn)
         if (color != 0) {
             led.send(listOf(LED.TURN_ON, color))
@@ -63,7 +84,7 @@ class NotificationListenerService: android.service.notification.NotificationList
 
     @TargetApi(Build.VERSION_CODES.O)
     fun pullColorFromChannelApi26(sbn: StatusBarNotification): Int? {
-        Log.i("NLS", "got notification pkg=${sbn?.packageName}, txt=${sbn?.notification?.tickerText}")
+        Log.i("NLS", "got notification pkg=${sbn.packageName}, txt=${sbn.notification?.tickerText}")
         if (sbn.notification.channelId.isNullOrEmpty()) {
             Log.i("NLS", "notification has no channel id")
             return null
@@ -78,8 +99,38 @@ class NotificationListenerService: android.service.notification.NotificationList
         return led.colorMapping(channel.lightColor)
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        Log.i("NLS", "removed notification pkg=${sbn?.packageName}, txt=${sbn?.notification?.tickerText}")
+    override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            // lets try to pull the color from the remaining notification itself
+            return onNotificationRemoved(sbn)
+        }
+
+        if (activeNotifications.isEmpty() || rankingMap.orderedKeys.isEmpty()) {
+            Log.i("NLS", "found no other notifications, turning off")
+            led.send(LED.TURN_OFF)
+            return
+        }
+
+        val rankedColor = rankingMap.orderedKeys.map { key ->
+            val r = Ranking()
+            rankingMap.getRanking(key, r)
+            if (r.channel != null && r.channel.shouldShowLights()) {
+                Log.i("NLS", "found still active notification with channel color, channel=${r.channel.name}")
+                return@map led.colorMapping(r.channel.lightColor)
+            }
+            null
+        }.filterNotNull().firstOrNull()
+
+        if (rankedColor != null && rankedColor != 0) {
+            led.send(listOf(LED.TURN_ON, rankedColor))
+            return
+        }
+
+        return onNotificationRemoved(sbn)
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        Log.i("NLS", "removed notification pkg=${sbn.packageName}, txt=${sbn.notification?.tickerText}")
 
         val notifications = activeNotifications.filter { pullColor(it) != 0 }
         if (notifications.isEmpty()) {
