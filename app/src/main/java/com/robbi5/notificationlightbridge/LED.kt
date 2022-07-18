@@ -86,7 +86,7 @@ class LED {
     fun send(colors: List<Int>) {
         val colorHexs = colors.map { "%02x".format(it) }
         Log.i("NLS", "sending ${colorHexs.joinToString()}")
-        val commands = colorHexs.map { "echo w 0x${it} > /sys/devices/platform/led_con_h/zigbee_reset\nsleep 0.1" }
+        val commands = colorHexs.map { "echo w 0x${it} > /sys/devices/platform/led_con_h/zigbee_reset\nsleep 0.5" }
         rootedExec(commands)
     }
 
